@@ -75,8 +75,6 @@ with `PERMISSION_DENIED` and you will see the "Location is off" screen no matter
 what you do. Only a Hub-installed build (private, beta or released) gets a
 position fix. Budget for this: the entire app is downstream of the GPS.
 
-![Degraded states](docs/states.png)
-
 Every state above is a designed screen, not a crash — moored with no course,
 inland with no wave model, and location denied.
 
