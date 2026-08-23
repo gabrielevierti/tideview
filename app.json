@@ -1,0 +1,21 @@
+{
+  "package_id": "com.gabrielevierti.seastate",
+  "edition": "202601",
+  "name": "SeaState",
+  "version": "1.0.0",
+  "min_sdk_version": "0.0.14",
+  "min_app_version": "0.0.0",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "location",
+      "desc": "Shows your speed, course and the marine forecast for where you are."
+    },
+    {
+      "name": "network",
+      "desc": "Fetches marine weather and sea state forecasts.",
+      "whitelist": ["https://api.open-meteo.com", "https://marine-api.open-meteo.com"]
+    }
+  ],
+  "supported_languages": ["en", "it"]
+}
