@@ -1,5 +1,3 @@
-# SeaState
-
 A marine conditions HUD for [Even Realities G2](https://www.evenrealities.com) smart
 glasses. Speed, course, wind, sea state and weather — on the lens, hands free,
 with **no instruments, no gateway and no boat wiring**. Everything comes from the
