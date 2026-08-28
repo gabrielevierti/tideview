@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="preconnect" href="https://rsms.me/" />
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <style>body { margin: 0; background: #000; }</style>
+  </head>
+  <body>
+    <canvas id="sheet"></canvas>
+    <script type="module">
+      import { GlyphFrame, loadFontSet, safe as SAFE, screen as SCREEN } from "@gabrielevierti/glyph";
+      import { screens } from "/src/screens/index.ts";
+      import { dataBus } from "/src/dataBus.ts";
+      import { session } from "/src/session.ts";
+
+      /**
+       * Renders every screen — and every state a screen can be in — from one
+       * fixed set of conditions, so a visual regression is something you see
+       * rather than something a wearer reports.
+       */
+
+      const CONDITIONS = {
+        locationPermission: "granted",
+        forecastLoaded: true,
+        fix: {
+          lat: 44.303, lon: 9.209, accuracyM: 6,
+          sogKnots: 6.4, cogDeg: 127, valid: true, at: Date.now()
+        },
+        weather: {
+          temperatureC: 23,
+          windSpeedKnots: 14.2,
+          windGustKnots: 19.5,
+          windDirection: 95,
+          precipitation: 0,
+          hourlyProbability: [10, 15, 25, 40, 65, 80, 70, 45, 30, 20, 15, 5],
+          nextRainMinutes: 195,
+          valid: true
+        },
+        sea: {
+          waveHeightM: 1.4, wavePeriodS: 6.2, waveDirection: 250,
+          swellHeightM: 0.9, swellPeriodS: 9.1, swellDirection: 265,
+          seaTemperatureC: 21, valid: true
+        }
+      };
+
+      let fontSet = null;
+      try { fontSet = await loadFontSet("/fonts/inter.json"); } catch { /* host fonts */ }
+      window.__font = fontSet ? fontSet.keys().length : 0;
+
+      const PHOSPHOR = [90, 255, 190];
+
+      function paint(screen, index) {
+        const frame = new GlyphFrame({ supersample: 3 });
+        if (fontSet) frame.raster.useFont(fontSet);
+        frame.raster.clear(0);
+        screen.render({
+          g: frame.raster,
+          now: 4000,
+          screen: { x: 0, y: 0, ...SCREEN },
+          safe: SAFE,
+          app: { screens, screenIndex: index }
+        });
+        const levels = frame.toLevels();
+        const canvas = document.createElement("canvas");
+        canvas.width = SCREEN.width;
+        canvas.height = SCREEN.height;
+        const ctx = canvas.getContext("2d");
+        const image = ctx.createImageData(SCREEN.width, SCREEN.height);
+        for (let i = 0; i < levels.length; i++) {
+          const level = levels[i] / 15;
+          image.data[i * 4] = PHOSPHOR[0] * level;
+          image.data[i * 4 + 1] = PHOSPHOR[1] * level;
+          image.data[i * 4 + 2] = PHOSPHOR[2] * level;
+          image.data[i * 4 + 3] = 255;
+        }
+        ctx.putImageData(image, 0, 0);
+        frame.dispose();
+        return canvas;
+      }
+
+      const shots = {};
+      const sheetItems = [];
+
+      dataBus.update(structuredClone(CONDITIONS));
+      screens.forEach((screen, i) => {
+        const canvas = paint(screen, i);
+        shots[screen.name.toLowerCase().replace(/\s+/g, "-")] = canvas.toDataURL("image/png");
+        sheetItems.push([screen.name, canvas]);
+      });
+
+      // Every failure mode is a designed screen, so every failure mode gets shot.
+      const states = [
+        ["Location denied", {
+          locationPermission: "denied",
+          fix: { ...CONDITIONS.fix, valid: false, sogKnots: null, cogDeg: null }
+        }, 0],
+        ["No wave model", { sea: { ...CONDITIONS.sea, valid: false } }, 2],
+        ["No forecast", { weather: { ...CONDITIONS.weather, valid: false }, forecastLoaded: false }, 3]
+      ];
+      for (const [label, patch, index] of states) {
+        dataBus.update({ ...structuredClone(CONDITIONS), ...patch });
+        const canvas = paint(screens[index], index);
+        shots[label.toLowerCase().replace(/\s+/g, "-")] = canvas.toDataURL("image/png");
+        sheetItems.push([label, canvas]);
+      }
+      session.demo = false;
+
+      const COLS = 2, PAD = 26, GAP = 22, LABEL = 26;
+      const rows = Math.ceil(sheetItems.length / COLS);
+      const sheet = document.getElementById("sheet");
+      sheet.width = PAD * 2 + COLS * SCREEN.width + (COLS - 1) * GAP;
+      sheet.height = PAD * 2 + rows * (SCREEN.height + LABEL) + (rows - 1) * GAP;
+      const ctx = sheet.getContext("2d");
+      ctx.fillStyle = "#070a08";
+      ctx.fillRect(0, 0, sheet.width, sheet.height);
+      ctx.imageSmoothingEnabled = false;
+
+      sheetItems.forEach(([name, canvas], i) => {
+        const x = PAD + (i % COLS) * (SCREEN.width + GAP);
+        const y = PAD + Math.floor(i / COLS) * (SCREEN.height + LABEL + GAP);
+        ctx.fillStyle = "#8fdcb2";
+        ctx.font = "600 12px Inter, Arial, sans-serif";
+        ctx.letterSpacing = "1.4px";
+        ctx.fillText(name.toUpperCase(), x + 1, y + 13);
+        ctx.letterSpacing = "0px";
+        ctx.drawImage(canvas, x, y + LABEL - 6);
+        ctx.strokeStyle = "#1d2a23";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + LABEL - 6 + 0.5, SCREEN.width - 1, SCREEN.height - 1);
+      });
+
+      window.__shots = shots;
+      window.__sheet = sheet.toDataURL("image/png");
+      window.__done = true;
+    </script>
+  </body>
+</html>

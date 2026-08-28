@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><style>body { margin: 0; background: #000; }</style></head>
+  <body>
+    <script type="module">
+      import { GlyphFrame, inkBudget, minContrast, safe as SAFE, screen as SCREEN } from "@gabrielevierti/glyph";
+      import { screens } from "/src/screens/index.ts";
+      import { dataBus } from "/src/dataBus.ts";
+
+      /**
+       * Two numbers a see-through display cares about, asserted rather than
+       * eyeballed: how much of the world the UI hides, and whether what hides
+       * it can be read. Both are invisible in a screenshot on a bright monitor.
+       */
+
+      const SAILING = {
+        locationPermission: "granted", forecastLoaded: true,
+        fix: { lat: 44.3, lon: 9.2, accuracyM: 6, sogKnots: 6.4, cogDeg: 127, valid: true, at: Date.now() },
+        weather: {
+          temperatureC: 23, windSpeedKnots: 14.2, windGustKnots: 19.5, windDirection: 95,
+          precipitation: 0, hourlyProbability: [10, 15, 25, 40, 65, 80, 70, 45, 30, 20, 15, 5],
+          nextRainMinutes: 195, valid: true
+        },
+        sea: {
+          waveHeightM: 1.4, wavePeriodS: 6.2, waveDirection: 250, swellHeightM: 0.9,
+          swellPeriodS: 9.1, swellDirection: 265, seaTemperatureC: 21, valid: true
+        }
+      };
+      const MOORED = {
+        ...SAILING,
+        fix: { ...SAILING.fix, sogKnots: 0, cogDeg: null },
+        sea: { ...SAILING.sea, valid: false }
+      };
+
+      const results = [];
+
+      for (const [label, fixture] of [["sailing", SAILING], ["moored", MOORED]]) {
+        dataBus.update(structuredClone(fixture));
+        for (const surface of ["outline", "filled"]) {
+          screens.forEach((screen, index) => {
+            const frame = new GlyphFrame({ supersample: 2, surface });
+            const warnings = frame.raster.enableContrastLint(minContrast);
+            frame.raster.clear(0);
+            let threw = null;
+            try {
+              screen.render({
+                g: frame.raster, now: 4000,
+                screen: { x: 0, y: 0, ...SCREEN }, safe: SAFE,
+                app: { screens, screenIndex: index }
+              });
+            } catch (error) {
+              threw = String(error);
+            }
+            const levels = frame.toLevels();
+
+            let sum = 0;
+            let lit = 0;
+            let bleed = 0;
+            for (let y = 0; y < SCREEN.height; y++) {
+              for (let x = 0; x < SCREEN.width; x++) {
+                const v = levels[y * SCREEN.width + x];
+                sum += v;
+                if (v > 0) {
+                  lit++;
+                  // One pixel of tolerance: a hairline drawn *on* the safe edge
+                  // straddles it, and half a pixel of panel border is not what
+                  // the margin exists to protect against.
+                  const inside = x >= SAFE.x - 1 && x < SAFE.x + SAFE.width + 1
+                    && y >= SAFE.y - 1 && y < SAFE.y + SAFE.height + 1;
+                  if (!inside) bleed++;
+                }
+              }
+            }
+            results.push({
+              screen: screen.name, fixture: label, surface, threw,
+              ink: sum / (levels.length * 15),
+              lit: lit / levels.length,
+              bleed,
+              contrast: warnings.map((w) => `${w.text} (${w.gray} on ${w.background})`)
+            });
+            frame.dispose();
+          });
+        }
+      }
+
+      window.__results = results;
+      window.__budget = inkBudget;
+      window.__done = true;
+    </script>
+  </body>
+</html>
