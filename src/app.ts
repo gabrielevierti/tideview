@@ -1,4 +1,4 @@
-import { GlyphApp, TILE_CHROME, loadFontSet } from "@gabrielevierti/glyph";
+import { GlyphApp, TILE_QUADRANTS, loadFontSet } from "@gabrielevierti/glyph";
 import { GlyphRuntime } from "@gabrielevierti/glyph/runtime";
 import type { GlyphFontSet } from "@gabrielevierti/glyph";
 
@@ -15,7 +15,10 @@ const TICK_MS = 30_000;
 export interface SeaStateApp {
   app: GlyphApp;
   hub: Hub;
+  /** Non-null only once the host has actually accepted a page of containers. */
   runtime: GlyphRuntime | null;
+  /** True when frames are going to glasses rather than to the preview canvas. */
+  bridged: boolean;
   dispose(): void;
 }
 
@@ -44,16 +47,15 @@ export async function createApp(
   session.demo = import.meta.env.VITE_DEMO === "1";
 
   const hub = await connectHub();
-  session.bridged = hub.bridged;
-
   const font = await loadFont();
 
   const app = new GlyphApp({
     screens,
-    // Measured, not chosen by taste: of the five shapes Glyph ships, the chrome
-    // split is the cheapest for this design — a status strip that changes once
-    // a minute has no business sharing a tile with a compass rose.
-    tileLayout: TILE_CHROME,
+    // Quadrants, and not by preference: an image container is capped at
+    // 288x144, and four of those cover 576x288 exactly — so this is the only
+    // shape that both fits the cap and covers the screen. Glyph's other
+    // layouts are rejected by the host at page creation.
+    tileLayout: TILE_QUADRANTS,
     fps: FPS,
     transitionMs: TRANSITION_MS,
     font,
@@ -62,17 +64,23 @@ export async function createApp(
     onSlowFrame: ({ screen, ms }) => console.warn(`[app] ${screen} painted in ${ms.toFixed(1)}ms`)
   });
 
+  // Whether we are on glasses is not answerable by asking: the SDK resolves a
+  // bridge object in any browser tab, and only reports the truth when a call
+  // reaches the host and fails. So we try to create the page, and a failure is
+  // a normal, expected answer — it means "browser", not "broken".
   let runtime: GlyphRuntime | null = null;
-  if (hub.bridged) {
-    runtime = new GlyphRuntime({ tileLayout: TILE_CHROME });
+  if (hub.bridge) {
+    const candidate = new GlyphRuntime({ tileLayout: TILE_QUADRANTS });
     try {
-      await runtime.start();
-      app.attachRuntime(runtime);
+      await candidate.start();
+      app.attachRuntime(candidate);
+      runtime = candidate;
     } catch (error) {
-      console.error("[app] runtime failed to start", error);
-      runtime = null;
+      console.info("[app] no Even Hub host — running the browser preview", error);
+      await candidate.stop().catch(() => undefined);
     }
   }
+  session.bridged = runtime !== null;
 
   // ── Input ────────────────────────────────────────────────────────────────
   // Tap pages forward, swipe up goes back, swipe down dims. Double tap is not
@@ -114,6 +122,7 @@ export async function createApp(
     app,
     hub,
     runtime,
+    bridged: runtime !== null,
     dispose() {
       clearInterval(tick);
       unsubscribe();

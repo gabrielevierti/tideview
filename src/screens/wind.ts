@@ -50,7 +50,8 @@ export const windScreen: Screen = {
 
     const wind = solveWind(weather.windDirection, weather.windSpeedKnots, fix.cogDeg, fix.sogKnots);
 
-    // The dial sits entirely left of x=192, so it animates inside one tile.
+    // The dial sits entirely left of the x=288 seam, so it never dirties the
+    // panels on the right when the wind shifts.
     const [dialCol, panels] = row(body, [{ size: 170 }, { size: grow(1) }], { gap: S.md });
     const [dialBox, legendBox] = column(dialCol, [{ size: grow(1) }, { size: 14 }], { gap: S.xs });
 

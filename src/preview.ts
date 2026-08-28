@@ -78,7 +78,7 @@ export function createPreview(): Preview | null {
     },
 
     attach(seastate) {
-      if (seastate.hub.bridged) return;   // real glasses: nobody is looking at the DOM
+      if (seastate.bridged) return;   // real glasses: nobody is looking at the DOM
       active = true;
       root.hidden = false;
 

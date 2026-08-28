@@ -16,10 +16,11 @@ import { boatDial, trendLine } from "../ui/instruments";
  * The screen you sail on: how fast, which way, what the breeze is doing, and
  * what the sea under it is doing.
  *
- * The three columns are 170 / 192 / 170 with 8px gaps, which puts the middle
- * column exactly on the middle tile of `TILE_CHROME`. The compass is the only
- * thing here that turns continuously, so it turns inside one image container
- * and the panels either side are never resent because of it.
+ * Three columns of 170 / 192 / 170. The tile seams sit at x=288 and y=144, so
+ * the two side panels each live in their own column of quadrants and only the
+ * compass — dead centre, and therefore across all four — costs a full repaint
+ * when it turns. It turns when the course changes, which on a boat is about
+ * once a second at worst, not twenty times.
  */
 
 function rainNote(nextRainMinutes: number | null, valid: boolean): string {

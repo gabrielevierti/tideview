@@ -1,4 +1,4 @@
-# SeaState
+# TideView
 
 A marine conditions HUD for [Even Realities G2](https://www.evenrealities.com) smart
 glasses. Speed, course, wind, sea state and weather — on the lens, hands free,
@@ -6,6 +6,10 @@ with **no instruments, no gateway and no boat wiring**. Everything comes from th
 phone's GPS and a public marine forecast, so it works the moment it is installed.
 
 Drawn with [Glyph](https://github.com/gabrielevierti/glyph).
+
+The repo and the npm package are `tideview`; the app's display name on the
+glasses is **SeaState**, set in `app.json`. That split is inherited from v1 and
+kept so the `package_id` stays the one already reserved on the dev portal.
 
 ![The four screens](docs/screens.png)
 
@@ -64,13 +68,17 @@ whether to bear away it beats a bare wind direction in degrees.
 
 ## Design notes
 
-**The columns are 170 / 192 / 170.** Not taste: with 8px gaps that puts the
-middle column exactly on the middle tile of Glyph's `TILE_CHROME` layout
-(576×32 strip + three 192×256 panels). The compass rose is the only thing on the
-navigation screen that turns continuously, so it turns inside one image
-container and the panels either side are never resent because of it. Glyph's own
-`npm run tiles` measurement had this shape cheapest for this design; lining the
-seams up with the layout is what makes that true rather than lucky.
+**The tiling is quadrants, and there is no choice about it.** An image
+container is capped at 288×144, and four of those cover 576×288 exactly — so
+the SDK reference layout is the only shape that both fits the cap and covers the
+screen. Glyph ships four other layouts and the host rejects all of them at page
+creation (`image container size 576x32 exceeds maximum 288x144`).
+
+**The columns are 170 / 192 / 170.** With the seams fixed at x=288 and y=144,
+that keeps each side panel inside one column of quadrants, so a changing speed
+readout does not resend the wind panel. The compass is dead centre and therefore
+crosses all four tiles — it is the one element that costs a full repaint, and it
+only pays when the course changes.
 
 **Outline, not filled.** Every lit pixel is a pixel of the sea you cannot see
 through. Panels are a hairline and their contents; nothing is a filled card.
@@ -123,6 +131,12 @@ npm run snapshot   # re-render docs/screens/*.png
 npm run font       # build the bitmap font atlas
 ```
 
+The last three drive a real browser, so once per machine:
+
+```bash
+npx playwright install chromium
+```
+
 ### The font atlas
 
 `public/fonts/` is empty in the repo. Without an atlas Glyph measures and
@@ -137,6 +151,18 @@ Note that the tool prints which family the browser *says* it resolved, and a
 computed `font-family` is the specified list rather than the used font — so a
 silent substitution on a machine without Inter installed will not be reported.
 Check the atlas visually the first time you build it.
+
+## There is no way to ask whether you are on glasses
+
+`waitForEvenAppBridge()` resolves in a plain browser tab. The SDK constructs a
+bridge object regardless of host and only discovers there is nothing behind it
+when a call fails — so "did I get a bridge" is not the question, and an app that
+treats it as one will hide its own preview and then fail to start.
+
+`app.ts` therefore *tries*: it creates the page of containers and treats the
+failure as an ordinary answer meaning "browser", not as an error. That is also
+the only reliable way to learn that a tile layout is illegal, since nothing
+client-side validates the 288×144 cap.
 
 ## Input and lifecycle
 

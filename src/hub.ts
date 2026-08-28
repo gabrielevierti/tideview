@@ -19,9 +19,13 @@ export type HubInput = "tap" | "double-tap" | "scroll-up" | "scroll-down";
  * Glyph get on with pushing tiles.
  */
 export interface Hub {
-  /** Null in a plain browser tab: there is no host, and that is a valid state. */
+  /**
+   * The SDK hands back a bridge object in a plain browser tab too — it only
+   * discovers there is no Flutter host behind it when a call fails. So this
+   * being non-null does **not** mean there are glasses on the other end; only
+   * a successful `createStartUpPageContainer` means that. See `app.ts`.
+   */
   readonly bridge: EvenAppBridge | null;
-  readonly bridged: boolean;
   onInput(listener: (input: HubInput) => void): () => void;
   /** Backgrounded: stop the GPS watch and the forecast poll. */
   onSuspend(listener: () => void): void;
@@ -113,12 +117,11 @@ export async function connectHub(): Promise<Hub> {
       }
     });
   } else {
-    console.info("[hub] no Even Hub bridge — running the browser preview");
+    console.info("[hub] no Even Hub bridge at all — browser preview");
   }
 
   return {
     bridge,
-    bridged: bridge !== null,
     onInput(listener) {
       inputs.add(listener);
       return () => inputs.delete(listener);
